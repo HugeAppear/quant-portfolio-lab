@@ -1,0 +1,47 @@
+# Quant Portfolio Lab v0.1 -- backtest policy (machine-readable mirror of the spec)
+# All values here are simulation defaults and are configurable per run.
+
+costs:
+  brokerage_fee_rate: 0.001        # 0.1% per side, buy and sell
+  transaction_tax_rate: 0.0020     # 0.20% on sell trades only (market/date configurable)
+  slippage:
+    liquid: 0.002                  # 0.1%-0.3% band; 0.2% default
+    illiquid: 0.0075               # 0.5%-1.0% band; 0.75% default
+    default: 0.002
+  delisting_loss: 1.0              # 100% loss on detected delisting (scenario assumption)
+
+rebalance:
+  modes:
+    "6M":
+      every_n_months: 6
+      suggested_months: [6, 12]
+      trading_day_period: 126
+    "1Y":
+      every_n_months: 12
+      suggested_month: 12
+  holiday_rule: next_trading_day
+
+factor:
+  exclusions:
+    exclude_eps_non_positive: true   # EPS <= 0 -> drop from low-PER
+    exclude_bps_non_positive: true   # BPS <= 0 -> drop from low-PBR
+    exclude_missing: true            # missing EPS/BPS -> drop from ranking
+  point_in_time:
+    require_report_on_or_before_rebalance: true   # report_date <= rebalance_date
+    price_lookback_days: 1                         # rebalance date or previous trading day
+
+strategy_mvp:
+  name: low_pbr_kr
+  universe: kr_common_equity
+  exclude_etf: true
+  factor: pbr
+  rank: ascending          # lowest first
+  top_n: 20
+  weighting: equal
+  rebalance: "1Y"
+  benchmark: KOSPI
+
+benchmarks:
+  KOSPI: KS11
+  SP500: US500
+  DJIA: DJI

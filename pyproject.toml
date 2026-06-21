@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant-portfolio-lab"
+version = "0.1.0"
+description = "Personal quant research platform: organize, backtest, and visualize equity/ETF strategies (v0.1)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Quant Portfolio Lab" }]
+
+dependencies = [
+    "duckdb>=0.10",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+    "plotly>=5.18",
+]
+
+[project.optional-dependencies]
+# Data sources for Korean equities + benchmarks. Optional so the core engine
+# and the test suite run fully offline.
+data = [
+    "pykrx>=1.0.45",
+    "finance-datareader>=0.9.50",
+]
+app = ["streamlit>=1.30"]
+dev = ["pytest>=7.4", "ruff>=0.4"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

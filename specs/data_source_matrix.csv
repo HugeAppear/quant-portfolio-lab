@@ -1,0 +1,8 @@
+data_domain,asset_scope,primary_source,fallback_source,fields,frequency,notes
+prices,KR equities,pykrx,FinanceDataReader,"open,high,low,close,volume",daily,"adjusted_close approximated from close in v0.1"
+prices,KR ETFs,pykrx,FinanceDataReader,"open,high,low,close,volume",daily,ETF universe used for allocation/benchmark only in v0.1
+prices,benchmark KOSPI,FinanceDataReader,pykrx,close,daily,"FDR symbol KS11"
+prices,benchmark S&P500,FinanceDataReader,yfinance,close,daily,"FDR symbol US500 / ^GSPC"
+prices,benchmark DJIA,FinanceDataReader,yfinance,close,daily,"FDR symbol DJI / ^DJI"
+fundamentals,KR equities,pykrx,csv,"per,pbr,eps,bps",daily-snapshot,"pykrx get_market_fundamental returns PER/PBR/EPS/BPS"
+delisting,KR equities,manual_csv,none,"asset_id,delisting_date",event,"100% loss assumption applied at delisting_date"

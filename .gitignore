@@ -1,0 +1,55 @@
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Build artifacts
+build/
+dist/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# DuckDB local databases and sidecar files
+data/*.duckdb
+data/*.duckdb.*
+data/*.wal
+data/*.tmp
+
+# Generated data / backtest outputs
+data/processed/*
+data/processed_*/*
+!data/processed/.gitkeep
+
+# Keep empty data folders
+!data/
+!data/raw/
+!data/raw/.gitkeep
+!data/processed/
+!data/processed/.gitkeep
+
+# Local backups / logs
+*.bak
+*.log
+
+# macOS
+.DS_Store
+__MACOSX/
+
+# IDE/editor
+.vscode/
+.idea/

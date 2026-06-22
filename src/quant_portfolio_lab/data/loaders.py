@@ -8,7 +8,11 @@ live database connection.
 
 from __future__ import annotations
 
-import duckdb
+try:
+    import duckdb
+except ImportError:  # pragma: no cover - optional when only synthetic data is used
+    duckdb = None
+
 import pandas as pd
 
 # Columns persisted per table (extra DataFrame columns are ignored).
@@ -48,7 +52,7 @@ def _replace_into(con: duckdb.DuckDBPyConnection, table: str, df: pd.DataFrame,
     con.register("_staging", frame)
     try:
         con.execute(f"INSERT OR REPLACE INTO {table} SELECT * FROM _staging")
-    except duckdb.Error:
+    except Exception:
         # Tables without a PK (e.g. backtest_trades) -> plain append.
         con.execute(f"INSERT INTO {table} SELECT * FROM _staging")
     finally:
@@ -84,6 +88,28 @@ def persist_market(con, market) -> dict[str, int]:
         "fundamentals": write_fundamentals(con, market.fundamentals),
         "benchmark": write_benchmark(con, market.benchmark),
     }
+
+
+def read_assets(con) -> pd.DataFrame:
+    """Return asset metadata ordered by ``asset_id``."""
+    try:
+        return con.execute("SELECT * FROM assets ORDER BY asset_id").df()
+    except Exception:
+        return pd.DataFrame()
+
+
+def read_fundamentals(con, asset_ids: list[int] | None = None) -> pd.DataFrame:
+    """Return fundamental snapshots, optionally restricted to ``asset_ids``."""
+    where = ""
+    params: list[int] = []
+    if asset_ids:
+        placeholders = ", ".join("?" for _ in asset_ids)
+        where = f"WHERE asset_id IN ({placeholders})"
+        params = [int(a) for a in asset_ids]
+    return con.execute(
+        f"SELECT * FROM fundamental_snapshots {where} ORDER BY asset_id, report_date",
+        params,
+    ).df()
 
 
 def read_price_panel(con, asset_ids: list[int] | None = None) -> pd.DataFrame:

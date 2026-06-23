@@ -10,6 +10,7 @@ allocation visualizations for the resulting portfolio.
 from __future__ import annotations
 
 import pandas as pd
+import plotly.graph_objects as go
 
 try:
     import streamlit as st
@@ -34,6 +35,26 @@ from quant_portfolio_lab.visualization.charts import (
     portfolio_weight_bar,
     portfolio_weight_heatmap,
     portfolio_weight_treemap,
+)
+
+
+DEFAULT_MANUAL_PORTFOLIO = pd.DataFrame(
+    [
+        {
+            "asset_id": 1,
+            "symbol": "SP500_PROXY",
+            "name": "S&P 500",
+            "asset_class": "Equity",
+            "weight_pct": 50.0,
+        },
+        {
+            "asset_id": 2,
+            "symbol": "BOND_PROXY",
+            "name": "Bond",
+            "asset_class": "Fixed Income",
+            "weight_pct": 50.0,
+        }
+    ]
 )
 
 
@@ -88,8 +109,162 @@ def _run_strategy(
     raise ValueError(f"unknown strategy {strategy!r}")
 
 
+def _validate_manual_portfolio(config: pd.DataFrame) -> list[str]:
+    errors: list[str] = []
+
+    required = {"asset_id", "symbol", "name", "asset_class", "weight_pct"}
+    missing = required.difference(config.columns)
+    if missing:
+        errors.append(f"Missing required columns: {sorted(missing)}")
+        return errors
+    
+    if config.empty:
+        errors.append("Portfolio configuration is empty.")
+        return errors
+    
+    if config["asset_id"].duplicated().any():
+        errors.append("Duplicate asset_id values are not allowed.")
+
+    if config["weight_pct"].isna().any():
+        errors.append("All rows must have a weight.")
+        
+    if (config["weight_pct"] < 0).any():
+        errors.append("Negative weights are not supported in the MVP.")
+        
+    total_weight = float(config["weight_pct"].sum())
+    if abs(total_weight - 100.0) > 1e-6:
+        errors.append(f"Weights must sum to 100%. Current total is {total_weight:.2f}%.")
+        
+    return errors
+
+
+def _allocation_bar_chart(config: pd.DataFrame) -> go.Figure:
+    frame = config.copy()
+    frame["label"] = frame["name"].fillna(frame["symbol"]).astype(str)
+    frame = frame.sort_values("weight_pct", ascending=False)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=frame["label"],
+            y=frame["weight_pct"] / 100.0,
+            text=[f"{w:.1f}%" for w in frame["weight_pct"]],
+            hovertemplate="%{x}<br>Weight=%{y:.2%}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title="Portfolio Configuration",
+        xaxis_title="Asset",
+        yaxis_title="Weight",
+        yaxis_tickformat=".0%",
+        template="plotly_white",
+    )
+    return fig
+
+
+def _allocation_donut_chart(config: pd.DataFrame) -> go.Figure:
+    frame = config.copy()
+    frame["label"] = frame["name"].fillna(frame["symbol"]).astype(str)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Pie(
+            labels=frame["label"],
+            values=frame["weight_pct"],
+            hole=0.45,
+            hovertemplate="%{label}<br>Weight=%{percent}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title="Portfolio Allocation",
+        template="plotly_white",
+    )
+    return fig
+
+
+def render_manual_portfolio_page() -> pd.DataFrame | None:
+    st.subheader("Manual Portfolio Configuration")
+    st.caption("Research configuration only · not investment advice")
+
+    edited = st.data_editor(
+        DEFAULT_MANUAL_PORTFOLIO,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "asset_id": st.column_config.NumberColumn(
+                "Asset ID",
+                min_value=1,
+                step=1,
+                required=True,
+            ),
+            "symbol": st.column_config.TextColumn(
+                "Symbol",
+                required=True,
+            ),
+            "name": st.column_config.TextColumn(
+                "Name",
+                required=True,
+            ),
+            "asset_class": st.column_config.SelectboxColumn(
+                "Asset Class",
+                options=["Equity", "Fixed Income", "Cash", "Commodity", "Other"],
+                required=True,
+            ),
+            "weight_pct": st.column_config.NumberColumn(
+                "Weight %",
+                min_value=0.0,
+                max_value=100.0,
+                step=0.5,
+                format="%.2f",
+                required=True,
+            ),
+        },
+    )
+
+    errors = _validate_manual_portfolio(edited)
+    if errors:
+        for error in errors:
+            st.error(error)
+        return None
+
+    st.success("Portfolio configuration is valid.")
+
+    display = edited.copy()
+    display["weight"] = display["weight_pct"] / 100.0
+
+    st.markdown("### Current allocation")
+    for row in display.sort_values("weight", ascending=False).to_dict("records"):
+        st.write(f"- {row['weight']:.1%} {row['name']}")
+
+    c1, c2 = st.columns(2)
+    c1.plotly_chart(_allocation_bar_chart(display), use_container_width=True)
+    c2.plotly_chart(_allocation_donut_chart(display), use_container_width=True)
+
+    st.dataframe(display, use_container_width=True)
+
+    return display
+
+
 def main() -> None:
     st.set_page_config(page_title="Quant Portfolio Lab", layout="wide")
+    
+    with st.sidebar:
+        mode = st.radio(
+            "App mode",
+            ["Strategy Backtest", "Manual Portfolio"],
+            index=0,
+        )
+        
+    if mode == "Manual Portfolio":
+        st.title("Quant Portfolio Lab — Manual Portfolio")
+        st.caption("research only · not investment advice")
+        
+        manual_config = render_manual_portfolio_page()
+        
+        # Later, this is where you can connect manual_config to BacktestEngine.
+        # For now, the manual page shows editable allocation + charts.
+        st.stop()
+    
     st.title("Quant Portfolio Lab — Backtest Result")
     st.caption("research only · not investment advice")
 
@@ -129,6 +304,7 @@ def main() -> None:
         cumulative_return_chart(result.equity_curve, result.benchmark),
         use_container_width=True,
     )
+    
     c1, c2 = st.columns([2, 1])
     c1.plotly_chart(drawdown_chart(result.equity_curve), use_container_width=True)
     c2.plotly_chart(
@@ -138,7 +314,10 @@ def main() -> None:
 
     st.subheader("Portfolio configuration")
     c3, c4 = st.columns([3, 2])
-    c3.plotly_chart(portfolio_weight_bar(result.positions, assets=assets), use_container_width=True)
+    c3.plotly_chart(
+        portfolio_weight_bar(result.positions, assets=assets), 
+        use_container_width=True,
+    )
     c4.plotly_chart(
         portfolio_weight_treemap(result.positions, assets=assets),
         use_container_width=True,
@@ -155,7 +334,9 @@ def main() -> None:
             "weight", ascending=False
         )
         final = final.merge(
-            assets[["asset_id", "symbol", "name"]], on="asset_id", how="left"
+            assets[["asset_id", "symbol", "name"]], 
+            on="asset_id", 
+            how="left",
         )
         st.dataframe(final, use_container_width=True)
 

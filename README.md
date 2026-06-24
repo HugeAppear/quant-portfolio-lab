@@ -10,6 +10,14 @@ The v0.1 goal is **correctness**, not optimization. See
 for the full policy and [`specs/backtest_policy.yaml`](specs/backtest_policy.yaml)
 for the machine-readable configuration.
 
+## AI assistance disclosure
+
+This repository was developed with substantial assistance from AI tools, especially Anthropic Claude and OpenAI ChatGPT/GPT models.
+
+AI assistance was used for architecture planning, implementation drafts, refactoring, debugging, test design, documentation, frontend scaffolding, and review of potential backtesting pitfalls. The maintainer reviewed, edited, tested, and made the final project decisions.
+
+This project should be treated as an educational and research analytics tool, not as investment advice or an automated trading system.
+
 ## What's implemented
 
 - **DuckDB schema** for assets, prices, fundamentals, factor snapshots,

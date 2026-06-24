@@ -1,111 +1,173 @@
+/* ---------------------------------------------------------------------------
+   Global styles for quant-portfolio-lab / research console
+   Color + font values mirror the tokens in src/theme.ts. The component tree
+   styles most things inline via that theme object; this file owns the pieces
+   CSS does better than inline styles: web fonts, the document reset, focus
+   rings, and the interactive states (:hover / .active / keyframes) that the
+   qpl-* class names in the TSX hook into.
+   --------------------------------------------------------------------------- */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --qpl-bg: #f5f7f9;
+  --qpl-surface: #ffffff;
+  --qpl-surface-alt: #fafbfc;
+  --qpl-border: #e4e8ec;
+  --qpl-border-strong: #cdd5dd;
+  --qpl-ink: #10151b;
+  --qpl-muted: #5a6573;
+  --qpl-faint: #8a93a1;
+  --qpl-accent: #3551e5;
+  --qpl-accent-soft: #edf0fe;
+  --qpl-positive: #137a52;
+  --qpl-negative: #c53434;
+  --qpl-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --qpl-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
   margin: 0;
+  background: var(--qpl-bg);
+  color: var(--qpl-ink);
+  font-family: var(--qpl-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
+h2,
+h3,
+h4,
+p,
+figure {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+button {
+  font-family: inherit;
+}
+
+/* Numeric cells opt in via the theme `mono` snippet, but make tabular figures
+   the default anywhere a <code> or .mono element shows up. */
+code,
+.mono {
+  font-family: var(--qpl-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visible, consistent keyboard focus ring across interactive elements. */
+:focus-visible {
+  outline: 2px solid var(--qpl-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+/* Base look comes from the Button component's inline styles; CSS owns hover
+   and disabled feedback so the component stays declarative. */
+.qpl-btn {
+  cursor: pointer;
+  transition: filter 0.12s ease, background-color 0.12s ease, border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.qpl-btn:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+.qpl-btn:active:not(:disabled) {
+  filter: brightness(0.92);
+}
+.qpl-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* --- Table rows ----------------------------------------------------------- */
+/* Clickable history / holdings rows get a subtle wash on hover. */
+.qpl-row {
+  transition: background-color 0.1s ease;
+}
+.qpl-row:hover {
+  background-color: var(--qpl-accent-soft);
+}
+
+/* --- Sidebar navigation --------------------------------------------------- */
+.qpl-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--qpl-muted);
+  font-weight: 500;
+  font-size: 13.5px;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.qpl-nav:hover {
+  background-color: var(--qpl-surface-alt);
+  color: var(--qpl-ink);
+}
+.qpl-nav.active {
+  background-color: var(--qpl-accent-soft);
+  color: var(--qpl-accent);
+  font-weight: 600;
+}
+
+/* --- Spinner -------------------------------------------------------------- */
+.qpl-spinner {
+  animation: qpl-spin 0.7s linear infinite;
+}
+@keyframes qpl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Respect users who prefer fewer animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Thin, unobtrusive scrollbars to match the console aesthetic. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--qpl-border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--qpl-border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--qpl-bg);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--qpl-faint);
 }

@@ -26,7 +26,18 @@ data = [
     "pykrx>=1.0.45",
     "finance-datareader>=0.9.50",
 ]
+
+# Existing Streamlit prototype UI.
 app = ["streamlit>=1.30"]
+
+# FastAPI backend for the React frontend.
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.0",
+]
+
+# Development and test tools.
 dev = ["pytest>=7.4", "ruff>=0.4"]
 
 [tool.setuptools.packages.find]

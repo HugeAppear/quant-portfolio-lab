@@ -53,3 +53,4 @@ __MACOSX/
 # IDE/editor
 .vscode/
 .idea/
+data/manual/

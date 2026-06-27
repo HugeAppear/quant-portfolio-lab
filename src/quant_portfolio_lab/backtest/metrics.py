@@ -26,6 +26,41 @@ def cagr(equity: pd.Series, periods_per_year: int = 252) -> float:
     return (equity.iloc[-1] / equity.iloc[0]) ** (1.0 / years) - 1.0
 
 
+def excess_cagr(
+    strategy_equity: pd.Series,
+    benchmark_equity: pd.Series,
+    periods_per_year: int = 252,
+) -> float:
+    """Strategy CAGR minus benchmark CAGR over the aligned date range.
+    
+    The benchmark is forward-filled onto the strategy equity index so that
+    strategy and benchmark are compared over the same dates.
+    """
+    if strategy_equity is None or benchmark_equity is None:
+        return np.nan
+    
+    strategy = strategy_equity.sort_index().dropna()
+    benchmark = benchmark_equity.sort_index().dropna()
+    
+    if strategy.empty or benchmark.empty:
+        return np.nan
+    
+    aligned = pd.DataFrame(
+        {
+            "strategy": strategy,
+            "benchmark": benchmark.reindex(strategy.index).ffill(),
+        }
+    ).dropna()
+    
+    if len(aligned) < 2:
+        return np.nan
+    
+    return cagr(aligned["strategy"], periods_per_year) - cagr(
+        aligned["benchmark"],
+        periods_per_year
+    )
+
+
 def annualized_volatility(equity: pd.Series, periods_per_year: int = 252) -> float:
     rets = to_returns(equity)
     if rets.empty:
@@ -94,5 +129,6 @@ def performance_summary(
                 bench.iloc[-1] / bench.iloc[0] - 1.0
             )
             summary["benchmark_cagr"] = cagr(bench, periods_per_year)
+            summary["excess_cagr"] = excess_cagr(equity, bench, periods_per_year)
             summary["benchmark_max_drawdown"] = max_drawdown(bench)
     return summary

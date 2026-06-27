@@ -3,7 +3,7 @@
 from .calendar import generate_rebalance_dates, next_trading_day
 from .cost_model import CostModel, SlippageTier, TradeCost
 from .engine import BacktestConfig, BacktestEngine, BacktestResult
-from .metrics import performance_summary
+from .metrics import excess_cagr, performance_summary
 
 __all__ = [
     "BacktestConfig",
@@ -15,4 +15,5 @@ __all__ = [
     "generate_rebalance_dates",
     "next_trading_day",
     "performance_summary",
+    "excess_cagr",
 ]

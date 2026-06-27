@@ -284,6 +284,8 @@ def main() -> int:
     print(f"# trades        : {len(result.trades)}")
     if "benchmark_total_return" in m:
         print(f"benchmark return: {m['benchmark_total_return']:.2%}")
+        print(f"benchmark CAGR  : {m.get('benchmark_cagr', float('nan')):.2%}")
+        print(f"excess CAGR     : {m.get('excess_cagr', float('nan')):.2%}")
 
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)

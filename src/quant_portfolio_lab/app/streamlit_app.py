@@ -259,7 +259,7 @@ def main() -> None:
         st.title("Quant Portfolio Lab — Manual Portfolio")
         st.caption("research only · not investment advice")
         
-        manual_config = render_manual_portfolio_page()
+        render_manual_portfolio_page()
         
         # Later, this is where you can connect manual_config to BacktestEngine.
         # For now, the manual page shows editable allocation + charts.

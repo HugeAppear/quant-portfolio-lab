@@ -1,32 +1,47 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { api, useApi } from "../api/client";
-import { num, shortDate } from "../theme";
-import { theme } from "../theme";
+import { num, pct, shortDate, theme } from "../theme";
 import { ErrorState, Loading, PageHeader, Panel } from "../components/ui";
-import { UNIVERSES, universeLabel, type FactorSignal, type UniverseId } from "../api/types";
+import {
+  STRATEGIES,
+  WEIGHTINGS,
+  dataModeLabel,
+  strategyLabel,
+  type FactorSignal,
+  type StrategyId,
+  type WeightingId,
+} from "../api/types";
 
-const TOP_OPTIONS = [10, 25, 50];
+const TOP_OPTIONS = [10, 20, 30, 50];
 
 export default function ShortlistPage() {
-  const [universe, setUniverse] = useState<UniverseId>(UNIVERSES[0].id);
-  const [top, setTop] = useState(25);
+  const [strategy, setStrategy] = useState<StrategyId>("value_momentum_quality");
+  const [top, setTop] = useState(20);
+  const [weighting, setWeighting] = useState<WeightingId>("equal");
 
   const { data, error, loading, refetch } = useApi(
-    () => api.getShortlist({ universe, top }),
-    [universe, top],
+    () => api.getShortlist({ strategy, top, weighting }),
+    [strategy, top, weighting],
   );
+
+  const isComposite = data?.items.some((i) => i.signals.length > 0) ?? false;
 
   return (
     <>
       <PageHeader
         title="Research shortlist"
-        description="Ranked candidates from scripts/recommend.py, scored across factor signals."
+        description="Current-date target portfolio for a strategy — the GUI twin of scripts/recommend.py. Research output only, not investment advice."
         actions={
           <div style={{ display: "flex", gap: 8 }}>
-            <select value={universe} onChange={(e) => setUniverse(e.target.value as UniverseId)} style={selectStyle}>
-              {UNIVERSES.map((u) => (
-                <option key={u.id} value={u.id}>{u.label}</option>
+            <select value={strategy} onChange={(e) => setStrategy(e.target.value as StrategyId)} style={selectStyle}>
+              {STRATEGIES.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+            <select value={weighting} onChange={(e) => setWeighting(e.target.value as WeightingId)} style={selectStyle}>
+              {WEIGHTINGS.map((w) => (
+                <option key={w.id} value={w.id}>{w.label}</option>
               ))}
             </select>
             <select value={top} onChange={(e) => setTop(Number(e.target.value))} style={selectStyle}>
@@ -39,8 +54,12 @@ export default function ShortlistPage() {
       />
 
       <Panel
-        title={`${universeLabel(universe)} candidates`}
-        subtitle={data ? `Generated ${shortDate(data.generatedAt)} · data as of ${shortDate(data.asOf)}` : undefined}
+        title={`${strategyLabel(strategy)} candidates`}
+        subtitle={
+          data
+            ? `Generated ${shortDate(data.generatedAt)} · data as of ${shortDate(data.asOf)} · ${dataModeLabel(data.dataModeUsed)}`
+            : undefined
+        }
         padding={0}
       >
         {loading ? (
@@ -57,9 +76,15 @@ export default function ShortlistPage() {
                   <th style={{ ...thStyle, textAlign: "right", width: 44 }}>#</th>
                   <th style={{ ...thStyle, textAlign: "left" }}>Ticker</th>
                   <th style={{ ...thStyle, textAlign: "left" }}>Name</th>
-                  <th style={{ ...thStyle, textAlign: "left" }}>Sector</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Score</th>
-                  <th style={{ ...thStyle, textAlign: "left", minWidth: 220 }}>Factor signals</th>
+                  <th style={{ ...thStyle, textAlign: "left" }}>Segment</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Weight</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Price</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>PER</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>PBR</th>
+                  {isComposite && <th style={{ ...thStyle, textAlign: "right" }}>Score</th>}
+                  {isComposite && (
+                    <th style={{ ...thStyle, textAlign: "left", minWidth: 220 }}>Factor signals</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -67,17 +92,20 @@ export default function ShortlistPage() {
                   <tr key={item.ticker} className="qpl-row">
                     <td style={{ ...tdStyle, textAlign: "right", color: theme.color.faint, fontFamily: theme.font.mono }}>{item.rank}</td>
                     <td style={{ ...tdStyle, fontFamily: theme.font.mono, fontWeight: 600 }}>{item.ticker}</td>
-                    <td style={tdStyle}>
-                      {item.name}
-                      {item.rationale && <div style={rationaleStyle}>{item.rationale}</div>}
-                    </td>
+                    <td style={tdStyle}>{item.name || "—"}</td>
                     <td style={{ ...tdStyle, color: theme.color.muted }}>{item.sector ?? "—"}</td>
-                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: theme.font.mono, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                      {num(item.score)}
-                    </td>
-                    <td style={tdStyle}>
-                      <SignalBars signals={item.signals} />
-                    </td>
+                    <td style={{ ...numTd, fontWeight: 600 }}>{pct(item.targetWeight)}</td>
+                    <td style={numTd}>{fmtPrice(item.price)}</td>
+                    <td style={numTd}>{num(item.per, 1)}</td>
+                    <td style={numTd}>{num(item.pbr, 2)}</td>
+                    {isComposite && (
+                      <td style={{ ...numTd, fontWeight: 600 }}>{num(item.score, 3)}</td>
+                    )}
+                    {isComposite && (
+                      <td style={tdStyle}>
+                        <SignalBars signals={item.signals} />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -85,40 +113,41 @@ export default function ShortlistPage() {
           </div>
         )}
       </Panel>
+
+      <p style={footnote}>
+        The shortlist only appears in the CLI after a strategy passes backtest approval gates
+        (scripts/recommend.py). Here it is always computed — validate a strategy on the Runs page
+        before acting on anything.
+      </p>
     </>
   );
 }
 
-/** Diverging mini-bars centered on zero: green = positive signal, red = negative. */
+function fmtPrice(v: number | null | undefined): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+  return `₩${Math.round(v).toLocaleString("ko-KR")}`;
+}
+
+/** Percentile scores in [0,1] rendered as compact labeled bars. */
 function SignalBars({ signals }: { signals: FactorSignal[] }) {
-  const scale = 3; // clamp z-scores to ~[-3, 3]
+  if (signals.length === 0) return <span style={{ color: theme.color.faint }}>—</span>;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      {signals.map((s) => {
-        const clamped = Math.max(-scale, Math.min(scale, s.value));
-        const widthPct = (Math.abs(clamped) / scale) * 50; // half-track each side
-        const positive = clamped >= 0;
-        return (
-          <div key={s.name} style={signalRowStyle}>
-            <span style={signalNameStyle}>{s.name}</span>
-            <span style={signalTrackStyle}>
-              <span style={signalAxisStyle} />
-              <span
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: positive ? "50%" : `${50 - widthPct}%`,
-                  width: `${widthPct}%`,
-                  background: positive ? theme.color.positive : theme.color.negative,
-                  borderRadius: 2,
-                }}
-              />
-            </span>
-            <span style={signalValueStyle}>{num(s.value, 1)}</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      {signals.map((s) => (
+        <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={signalLabelStyle}>{s.name}</span>
+          <div style={signalTrackStyle}>
+            <div
+              style={{
+                ...signalFillStyle,
+                width: `${Math.max(0, Math.min(1, s.value)) * 100}%`,
+                background: s.value >= 0.5 ? theme.color.positive : theme.color.warning,
+              }}
+            />
           </div>
-        );
-      })}
+          <span style={signalValueStyle}>{(s.value * 100).toFixed(0)}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -148,19 +177,45 @@ const tdStyle: CSSProperties = {
   padding: "10px 14px",
   borderBottom: `1px solid ${theme.color.grid}`,
   color: theme.color.ink,
-  verticalAlign: "top",
+  whiteSpace: "nowrap",
 };
-const rationaleStyle: CSSProperties = { marginTop: 2, fontSize: 12, color: theme.color.muted, maxWidth: 320 };
-const emptyStyle: CSSProperties = { padding: 24, textAlign: "center", color: theme.color.muted, fontSize: 14 };
-const signalRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
-const signalNameStyle: CSSProperties = { width: 78, fontSize: 11.5, color: theme.color.muted, textTransform: "capitalize" };
-const signalTrackStyle: CSSProperties = { position: "relative", width: 120, height: 8, background: theme.color.grid, borderRadius: 2 };
-const signalAxisStyle: CSSProperties = { position: "absolute", left: "50%", top: -1, bottom: -1, width: 1, background: theme.color.borderStrong };
-const signalValueStyle: CSSProperties = {
-  width: 36,
+const numTd: CSSProperties = {
+  ...tdStyle,
   textAlign: "right",
   fontFamily: theme.font.mono,
   fontVariantNumeric: "tabular-nums",
+};
+const signalLabelStyle: CSSProperties = {
+  width: 68,
+  flexShrink: 0,
+  fontSize: 10.5,
+  fontWeight: 600,
+  letterSpacing: "0.03em",
+  textTransform: "uppercase",
+  color: theme.color.faint,
+};
+const signalTrackStyle: CSSProperties = {
+  flex: 1,
+  height: 5,
+  minWidth: 70,
+  background: theme.color.grid,
+  borderRadius: 3,
+  overflow: "hidden",
+};
+const signalFillStyle: CSSProperties = { height: "100%", borderRadius: 3 };
+const signalValueStyle: CSSProperties = {
+  width: 24,
+  flexShrink: 0,
+  textAlign: "right",
+  fontFamily: theme.font.mono,
+  fontSize: 10.5,
+  color: theme.color.muted,
+  fontVariantNumeric: "tabular-nums",
+};
+const emptyStyle: CSSProperties = { padding: 24, textAlign: "center", color: theme.color.muted, fontSize: 14 };
+const footnote: CSSProperties = {
+  marginTop: 14,
   fontSize: 12,
-  color: theme.color.ink,
+  color: theme.color.faint,
+  lineHeight: 1.5,
 };

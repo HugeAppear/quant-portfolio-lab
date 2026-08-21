@@ -41,7 +41,46 @@ This project should be treated as an educational and research analytics tool, no
 - **Portfolio configuration charts**: final weights, treemap, and weight heatmap
   (`src/quant_portfolio_lab/visualization/charts.py`).
 
-## Quick start
+## Web GUI
+
+The lab has a local web app: a React dashboard (equity curves, drawdowns,
+allocation, holdings) driven by a FastAPI backend that wraps the backtest
+engine, the recommendation shortlist, and the data loaders. Run history is
+persisted in the project's DuckDB file, so past backtests survive restarts.
+
+```bash
+# One-time setup
+pip install -e ".[api]"
+(cd frontend && npm install)
+
+# Development (backend :8000 + Vite :5173, hot reload)
+./dev.sh
+# -> open http://localhost:5173
+
+# Single-process mode (serves the built GUI and the API on one port)
+(cd frontend && npm run build)
+python -m uvicorn quant_portfolio_lab.api.main:app --port 8000
+# -> open http://localhost:8000
+```
+
+GUI pages:
+
+- **Dashboard** — the latest completed run with metrics, equity curve vs
+  benchmark, drawdown, rebalance allocations, and final holdings.
+- **Runs** — configure a backtest (strategy / rebalance / top-N / weighting /
+  costs / dates) and launch it; live status polling and a persistent history
+  table backed by DuckDB (`app_runs`).
+- **Shortlist** — the GUI twin of `scripts/recommend.py`: current-date target
+  weights and factor-signal scores for any strategy.
+- **Data health** — row counts, staleness, and loader availability, plus a
+  button to pull real KRX data (pykrx / FinanceDataReader) into DuckDB as a
+  background job with a live log.
+
+With no real data loaded, every feature works against the deterministic
+synthetic market, so the GUI is fully usable offline. `QPL_DB_PATH` overrides
+the DuckDB location.
+
+## Quick start (CLI)
 
 ```bash
 # 1. Install (editable) with dev + data extras

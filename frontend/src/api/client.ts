@@ -6,11 +6,14 @@ import { useCallback, useEffect, useRef, useState, type DependencyList } from "r
 import type {
   DashboardData,
   DataHealth,
+  DataJob,
+  DataLoadRequest,
   Run,
   RunConfig,
   RunSummary,
   Shortlist,
-  UniverseId,
+  StrategyId,
+  WeightingId,
 } from "./types";
 
 const API_BASE =
@@ -78,15 +81,30 @@ export const api = {
   cancelRun: (id: string) =>
     request<RunSummary>(`/runs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
 
-  getShortlist: (params?: { universe?: UniverseId; top?: number }) => {
+  deleteRun: (id: string) =>
+    request<{ deleted: boolean }>(`/runs/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  getShortlist: (params?: {
+    strategy?: StrategyId;
+    top?: number;
+    weighting?: WeightingId;
+    dataMode?: string;
+  }) => {
     const q = new URLSearchParams();
-    if (params?.universe) q.set("universe", params.universe);
+    if (params?.strategy) q.set("strategy", params.strategy);
     if (params?.top) q.set("top", String(params.top));
+    if (params?.weighting) q.set("weighting", params.weighting);
+    if (params?.dataMode) q.set("dataMode", params.dataMode);
     const qs = q.toString();
     return request<Shortlist>(`/shortlist${qs ? `?${qs}` : ""}`);
   },
 
   getDataHealth: () => request<DataHealth>("/data-health"),
+
+  listDataJobs: () => request<DataJob[]>("/data/jobs"),
+  getDataJob: (id: string) => request<DataJob>(`/data/jobs/${encodeURIComponent(id)}`),
+  startDataLoad: (req: DataLoadRequest) =>
+    request<DataJob>("/data/load", { method: "POST", body: JSON.stringify(req) }),
 };
 
 // ---------------------------------------------------------------------------
@@ -133,4 +151,29 @@ export function useApi<T>(fn: () => Promise<T>, deps: DependencyList = []): Asyn
 
   const refetch = useCallback(() => setNonce((n) => n + 1), []);
   return { data, error, loading, refetch };
+}
+
+// ---------------------------------------------------------------------------
+// usePollingApi: like useApi, but refetches on an interval while `active`.
+// Used to watch queued/running backtests and data-load jobs.
+// ---------------------------------------------------------------------------
+
+export function usePollingApi<T>(
+  fn: () => Promise<T>,
+  deps: DependencyList,
+  options: { active: (data: T | null) => boolean; intervalMs?: number },
+): AsyncState<T> {
+  const state = useApi(fn, deps);
+  const { data, refetch } = state;
+  const activeRef = useRef(options.active);
+  activeRef.current = options.active;
+  const intervalMs = options.intervalMs ?? 1500;
+
+  useEffect(() => {
+    if (!activeRef.current(data)) return;
+    const t = setTimeout(refetch, intervalMs);
+    return () => clearTimeout(t);
+  }, [data, refetch, intervalMs]);
+
+  return state;
 }

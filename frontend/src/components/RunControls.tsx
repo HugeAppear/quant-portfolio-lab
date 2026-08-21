@@ -3,13 +3,15 @@ import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { theme } from "../theme";
 import { Button } from "./ui";
 import {
+  DATA_MODES,
   REBALANCE_FREQUENCIES,
   STRATEGIES,
-  UNIVERSES,
+  WEIGHTINGS,
+  type DataMode,
   type RebalanceFrequency,
   type RunConfig,
   type StrategyId,
-  type UniverseId,
+  type WeightingId,
 } from "../api/types";
 
 interface RunControlsProps {
@@ -18,65 +20,36 @@ interface RunControlsProps {
 }
 
 const TODAY = new Date().toISOString().slice(0, 10);
-const DEFAULT_START = "2015-01-01";
-
-// Strategy-specific numeric parameters surfaced as extra fields.
-const STRATEGY_PARAMS: Record<StrategyId, { key: string; label: string; default: number; step?: number }[]> = {
-  momentum: [
-    { key: "lookback", label: "Lookback (days)", default: 126 },
-    { key: "holding", label: "Holding (days)", default: 21 },
-    { key: "topN", label: "Top N names", default: 30 },
-  ],
-  mean_reversion: [
-    { key: "lookback", label: "Lookback (days)", default: 5 },
-    { key: "zEntry", label: "Z entry", default: 1.5, step: 0.1 },
-  ],
-  stat_arb: [
-    { key: "lookback", label: "Lookback (days)", default: 60 },
-    { key: "zEntry", label: "Z entry", default: 2, step: 0.1 },
-    { key: "zExit", label: "Z exit", default: 0.5, step: 0.1 },
-  ],
-  value: [{ key: "topN", label: "Top N names", default: 50 }],
-  low_vol: [{ key: "topN", label: "Top N names", default: 50 }],
-  ml: [
-    { key: "trainWindow", label: "Train window (days)", default: 504 },
-    { key: "topN", label: "Top N names", default: 30 },
-  ],
-  equal_weight: [],
-};
-
-function defaultsFor(strategy: StrategyId): Record<string, number> {
-  return Object.fromEntries(STRATEGY_PARAMS[strategy].map((p) => [p.key, p.default]));
-}
 
 export default function RunControls({ onSubmit, submitting }: RunControlsProps) {
-  const [strategy, setStrategy] = useState<StrategyId>("momentum");
-  const [universe, setUniverse] = useState<UniverseId>(UNIVERSES[0].id);
-  const [startDate, setStartDate] = useState(DEFAULT_START);
-  const [endDate, setEndDate] = useState(TODAY);
-  const [rebalance, setRebalance] = useState<RebalanceFrequency>("monthly");
-  const [initialCapital, setInitialCapital] = useState(1_000_000);
-  const [costBps, setCostBps] = useState(5);
-  const [slippageBps, setSlippageBps] = useState(2);
-  const [params, setParams] = useState<Record<string, number>>(defaultsFor("momentum"));
-
-  const onStrategyChange = (id: StrategyId) => {
-    setStrategy(id);
-    setParams(defaultsFor(id));
-  };
+  const [strategy, setStrategy] = useState<StrategyId>("low_pbr");
+  const [rebalance, setRebalance] = useState<RebalanceFrequency>("1Y");
+  const [topN, setTopN] = useState(20);
+  const [weighting, setWeighting] = useState<WeightingId>("equal");
+  const [benchmark, setBenchmark] = useState("KOSPI");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [initialCapital, setInitialCapital] = useState(10_000_000);
+  const [feeBps, setFeeBps] = useState(10);
+  const [taxBps, setTaxBps] = useState(20);
+  const [slippageBps, setSlippageBps] = useState(20);
+  const [dataMode, setDataMode] = useState<DataMode>("auto");
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     onSubmit({
       strategy,
-      universe,
-      startDate,
-      endDate,
       rebalance,
+      topN,
+      weighting,
+      benchmark: benchmark.trim() || "KOSPI",
+      startDate: startDate || null,
+      endDate: endDate || null,
       initialCapital,
-      transactionCostBps: costBps,
+      feeBps,
+      taxBps,
       slippageBps,
-      params,
+      dataMode,
     });
   };
 
@@ -84,17 +57,9 @@ export default function RunControls({ onSubmit, submitting }: RunControlsProps) 
     <form onSubmit={handleSubmit}>
       <div style={gridStyle}>
         <Field label="Strategy">
-          <select value={strategy} onChange={(e) => onStrategyChange(e.target.value as StrategyId)} style={inputStyle}>
+          <select value={strategy} onChange={(e) => setStrategy(e.target.value as StrategyId)} style={inputStyle}>
             {STRATEGIES.map((s) => (
               <option key={s.id} value={s.id}>{s.label}</option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Universe">
-          <select value={universe} onChange={(e) => setUniverse(e.target.value as UniverseId)} style={inputStyle}>
-            {UNIVERSES.map((u) => (
-              <option key={u.id} value={u.id}>{u.label}</option>
             ))}
           </select>
         </Field>
@@ -107,42 +72,61 @@ export default function RunControls({ onSubmit, submitting }: RunControlsProps) 
           </select>
         </Field>
 
-        <Field label="Start date">
-          <input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
+        <Field label="Top N names">
+          <input type="number" min={2} max={50} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} style={numInputStyle} />
         </Field>
 
-        <Field label="End date">
-          <input type="date" value={endDate} min={startDate} max={TODAY} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
+        <Field label="Weighting">
+          <select value={weighting} onChange={(e) => setWeighting(e.target.value as WeightingId)} style={inputStyle}>
+            {WEIGHTINGS.map((w) => (
+              <option key={w.id} value={w.id}>{w.label}</option>
+            ))}
+          </select>
         </Field>
 
-        <Field label="Initial capital ($)">
-          <input type="number" min={1000} step={1000} value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} style={numInputStyle} />
+        <Field label="Benchmark">
+          <input type="text" value={benchmark} onChange={(e) => setBenchmark(e.target.value)} style={inputStyle} placeholder="KOSPI" />
         </Field>
 
-        <Field label="Cost (bps)">
-          <input type="number" min={0} step={0.5} value={costBps} onChange={(e) => setCostBps(Number(e.target.value))} style={numInputStyle} />
+        <Field label="Data">
+          <select value={dataMode} onChange={(e) => setDataMode(e.target.value as DataMode)} style={inputStyle}>
+            {DATA_MODES.map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Start date (optional)">
+          <input type="date" value={startDate} max={endDate || TODAY} onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
+        </Field>
+
+        <Field label="End date (optional)">
+          <input type="date" value={endDate} min={startDate || undefined} max={TODAY} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
+        </Field>
+
+        <Field label="Initial capital (₩)">
+          <input type="number" min={100_000} step={100_000} value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} style={numInputStyle} />
+        </Field>
+
+        <Field label="Fee (bps)">
+          <input type="number" min={0} step={0.5} value={feeBps} onChange={(e) => setFeeBps(Number(e.target.value))} style={numInputStyle} />
+        </Field>
+
+        <Field label="Sell tax (bps)">
+          <input type="number" min={0} step={0.5} value={taxBps} onChange={(e) => setTaxBps(Number(e.target.value))} style={numInputStyle} />
         </Field>
 
         <Field label="Slippage (bps)">
           <input type="number" min={0} step={0.5} value={slippageBps} onChange={(e) => setSlippageBps(Number(e.target.value))} style={numInputStyle} />
         </Field>
-
-        {STRATEGY_PARAMS[strategy].map((p) => (
-          <Field key={p.key} label={p.label}>
-            <input
-              type="number"
-              step={p.step ?? 1}
-              value={params[p.key] ?? p.default}
-              onChange={(e) => setParams((prev) => ({ ...prev, [p.key]: Number(e.target.value) }))}
-              style={numInputStyle}
-            />
-          </Field>
-        ))}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, gap: 12 }}>
+        <span style={hintStyle}>
+          Leave dates empty to use the full available history. Costs are in basis points (10 bps = 0.10%).
+        </span>
         <Button type="submit" disabled={submitting}>
-          {submitting ? "Running…" : "Run backtest"}
+          {submitting ? "Starting…" : "Run backtest"}
         </Button>
       </div>
     </form>
@@ -188,4 +172,9 @@ const numInputStyle: CSSProperties = {
   ...inputStyle,
   fontFamily: theme.font.mono,
   fontVariantNumeric: "tabular-nums",
+};
+const hintStyle: CSSProperties = {
+  fontSize: 12,
+  color: theme.color.faint,
+  lineHeight: 1.4,
 };

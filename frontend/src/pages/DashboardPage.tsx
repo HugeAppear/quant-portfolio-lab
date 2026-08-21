@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { api, useApi } from "../api/client";
-import { pct, num, signedPct, shortDate } from "../theme";
-import { strategyLabel, universeLabel } from "../api/types";
+import { money, num, pct, shortDate, signedPct } from "../theme";
+import { dataModeLabel, strategyLabel, weightingLabel } from "../api/types";
 import MetricCard from "../components/MetricCard";
 import HoldingsTable from "../components/HoldingsTable";
 import PlotlyChart, {
@@ -49,6 +49,8 @@ export default function DashboardPage() {
   const equity = run.equityCurve ?? [];
   const allocation = run.allocation ?? [];
   const holdings = run.holdings ?? [];
+  const firstDate = equity[0]?.date;
+  const lastDate = equity[equity.length - 1]?.date;
 
   return (
     <>
@@ -56,26 +58,29 @@ export default function DashboardPage() {
         title="Dashboard"
         description={
           <>
-            {strategyLabel(run.strategy)} · {universeLabel(run.universe)} ·{" "}
-            {shortDate(run.config.startDate)} – {shortDate(run.config.endDate)}
+            {strategyLabel(run.strategy)} · {run.rebalance} rebalance · top {run.topN} ·{" "}
+            {weightingLabel(run.weighting)} · {dataModeLabel(run.dataModeUsed)} ·{" "}
+            {shortDate(firstDate)} – {shortDate(lastDate)}
           </>
         }
         actions={<StatusBadge status={run.status} />}
       />
 
       <div style={metricGrid}>
-        <MetricCard label="Total return" value={signedPct(m?.totalReturn)} numericValue={m?.totalReturn} intent="auto" />
-        <MetricCard label="CAGR" value={signedPct(m?.cagr)} numericValue={m?.cagr} intent="auto" />
+        <MetricCard label="Total return" value={signedPct(m?.totalReturn)} numericValue={m?.totalReturn ?? undefined} intent="auto" />
+        <MetricCard label="CAGR" value={signedPct(m?.cagr)} numericValue={m?.cagr ?? undefined} intent="auto" />
+        <MetricCard label="Excess CAGR" value={signedPct(m?.excessCagr)} numericValue={m?.excessCagr ?? undefined} intent="auto" hint="vs benchmark" />
         <MetricCard label="Sharpe" value={num(m?.sharpe)} intent="neutral" />
         <MetricCard label="Sortino" value={num(m?.sortino)} intent="neutral" />
         <MetricCard label="Max drawdown" value={pct(m?.maxDrawdown)} intent="negative" />
         <MetricCard label="Volatility" value={pct(m?.volatility)} intent="neutral" />
         <MetricCard label="Calmar" value={num(m?.calmar)} intent="neutral" />
-        <MetricCard label="Turnover" value={pct(m?.turnover, 0)} intent="neutral" hint="annualized" />
+        <MetricCard label="Turnover" value={pct(m?.turnover, 0)} intent="neutral" hint="avg per rebalance" />
+        <MetricCard label="Final value" value={money(m?.finalValue, true)} intent="neutral" />
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <Panel title="Equity curve" subtitle="Strategy value vs. benchmark over the test period">
+        <Panel title="Equity curve" subtitle="Strategy value vs. benchmark (rebased to the same starting capital)">
           {equity.length ? (
             <PlotlyChart data={buildEquityTraces(equity)} height={360} />
           ) : (
@@ -92,7 +97,7 @@ export default function DashboardPage() {
             <NoSeries />
           )}
         </Panel>
-        <Panel title="Allocation over time" subtitle="Portfolio weights by name (%)">
+        <Panel title="Allocation at each rebalance" subtitle="Portfolio weights by name (%)">
           {allocation.length ? (
             <PlotlyChart
               data={buildAllocationTraces(allocation)}
@@ -107,8 +112,8 @@ export default function DashboardPage() {
 
       <div style={{ marginTop: 18 }}>
         <Panel
-          title="Current holdings"
-          subtitle={`${holdings.length} positions · as of ${shortDate(run.config.endDate)}`}
+          title="Final holdings"
+          subtitle={`${holdings.length} positions · as of the last rebalance`}
           padding={0}
         >
           <HoldingsTable holdings={holdings} maxRows={15} />
@@ -116,9 +121,9 @@ export default function DashboardPage() {
       </div>
 
       <p style={footnote}>
-        Backtested results are gross of taxes and exclude market impact beyond the modeled{" "}
-        {num(run.config.transactionCostBps, 1)} bps cost / {num(run.config.slippageBps, 1)} bps slippage.
-        Live performance typically diverges from backtests.
+        Costs modeled: {num(run.config.feeBps, 1)} bps fee, {num(run.config.taxBps, 1)} bps sell tax,{" "}
+        {num(run.config.slippageBps, 1)} bps slippage. Backtested results are research output only —
+        live performance typically diverges from backtests. Not investment advice.
       </p>
     </>
   );

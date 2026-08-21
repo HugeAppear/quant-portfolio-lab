@@ -1,10 +1,17 @@
-import { useState } from "react";
-import { api, useApi } from "../api/client";
-import { num, pct, signedPct, shortDate } from "../theme";
-import { strategyLabel, universeLabel } from "../api/types";
-import { theme } from "../theme";
+import { useEffect, useRef, useState } from "react";
+import { api, useApi, usePollingApi } from "../api/client";
+import { money, num, pct, signedPct, theme } from "../theme";
+import {
+  ACTIVE_RUN_STATUSES,
+  dataModeLabel,
+  strategyLabel,
+  weightingLabel,
+  type RunConfig,
+  type RunStatus,
+} from "../api/types";
 import RunControls from "../components/RunControls";
-import PlotlyChart, { buildEquityTraces } from "../components/PlotlyChart";
+import HoldingsTable from "../components/HoldingsTable";
+import PlotlyChart, { buildDrawdownTrace, buildEquityTraces } from "../components/PlotlyChart";
 import MetricCard from "../components/MetricCard";
 import {
   ErrorState,
@@ -14,7 +21,15 @@ import {
   StatusBadge,
 } from "../components/ui";
 import type { CSSProperties } from "react";
-import type { RunConfig } from "../api/types";
+
+function fmtCreated(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("en-US", {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
 
 export default function RunsPage() {
   const runs = useApi(() => api.listRuns());
@@ -47,7 +62,7 @@ export default function RunsPage() {
 
       <div style={{ marginTop: 18 }}>
         <Panel title="History" subtitle="Select a run to inspect it" padding={0}>
-          {runs.loading ? (
+          {runs.loading && !runs.data ? (
             <Loading label="Loading runs…" />
           ) : runs.error ? (
             <ErrorState error={runs.error} onRetry={runs.refetch} />
@@ -60,7 +75,8 @@ export default function RunsPage() {
                   <tr>
                     <th style={{ ...thStyle, textAlign: "left" }}>Created</th>
                     <th style={{ ...thStyle, textAlign: "left" }}>Strategy</th>
-                    <th style={{ ...thStyle, textAlign: "left" }}>Universe</th>
+                    <th style={{ ...thStyle, textAlign: "left" }}>Config</th>
+                    <th style={{ ...thStyle, textAlign: "left" }}>Data</th>
                     <th style={{ ...thStyle, textAlign: "left" }}>Status</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>CAGR</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Sharpe</th>
@@ -77,9 +93,12 @@ export default function RunsPage() {
                         onClick={() => setSelectedId(active ? null : r.id)}
                         style={{ cursor: "pointer", background: active ? theme.color.accentSoft : undefined }}
                       >
-                        <td style={{ ...tdStyle, fontFamily: theme.font.mono, fontSize: 12.5 }}>{shortDate(r.createdAt)}</td>
+                        <td style={{ ...tdStyle, fontFamily: theme.font.mono, fontSize: 12.5 }}>{fmtCreated(r.createdAt)}</td>
                         <td style={tdStyle}>{strategyLabel(r.strategy)}</td>
-                        <td style={{ ...tdStyle, color: theme.color.muted }}>{universeLabel(r.universe)}</td>
+                        <td style={{ ...tdStyle, color: theme.color.muted, fontSize: 12.5 }}>
+                          {r.rebalance} · top {r.topN} · {weightingLabel(r.weighting)}
+                        </td>
+                        <td style={{ ...tdStyle, color: theme.color.muted, fontSize: 12.5 }}>{dataModeLabel(r.dataModeUsed)}</td>
                         <td style={tdStyle}><StatusBadge status={r.status} /></td>
                         <td style={numTd}>{signedPct(r.metrics?.cagr)}</td>
                         <td style={numTd}>{num(r.metrics?.sharpe)}</td>
@@ -94,40 +113,85 @@ export default function RunsPage() {
         </Panel>
       </div>
 
-      {selectedId && <RunDetail id={selectedId} />}
+      {selectedId && <RunDetail id={selectedId} onStatusSettled={runs.refetch} />}
     </>
   );
 }
 
-function RunDetail({ id }: { id: string }) {
-  const { data: run, error, loading, refetch } = useApi(() => api.getRun(id), [id]);
+function isActiveStatus(status: RunStatus | undefined): boolean {
+  return status !== undefined && ACTIVE_RUN_STATUSES.includes(status);
+}
+
+function RunDetail({ id, onStatusSettled }: { id: string; onStatusSettled: () => void }) {
+  const { data: run, error, loading, refetch } = usePollingApi(
+    () => api.getRun(id),
+    [id],
+    { active: (r) => isActiveStatus(r?.status) },
+  );
+
+  // When a watched run reaches a terminal state, refresh the history table so
+  // its status badge and metrics update too.
+  const prevStatus = useRef<RunStatus | null>(null);
+  useEffect(() => {
+    const status = run?.status ?? null;
+    if (
+      prevStatus.current !== null &&
+      isActiveStatus(prevStatus.current) &&
+      status !== null &&
+      !isActiveStatus(status)
+    ) {
+      onStatusSettled();
+    }
+    prevStatus.current = status;
+  }, [run?.status, onStatusSettled]);
+
+  const equity = run?.equityCurve ?? [];
+  const m = run?.metrics;
 
   return (
     <div style={{ marginTop: 18 }}>
-      <Panel title="Run detail" subtitle={run ? `${strategyLabel(run.strategy)} · ${shortDate(run.config.startDate)} – ${shortDate(run.config.endDate)}` : id}>
-        {loading ? (
+      <Panel
+        title="Run detail"
+        subtitle={
+          run
+            ? `${strategyLabel(run.strategy)} · ${run.rebalance} · top ${run.topN} · ${weightingLabel(run.weighting)} · ${dataModeLabel(run.dataModeUsed)}`
+            : id
+        }
+        actions={run ? <StatusBadge status={run.status} /> : undefined}
+      >
+        {loading && !run ? (
           <Loading label="Loading run…" />
         ) : error ? (
           <ErrorState error={error} onRetry={refetch} />
         ) : run?.status === "failed" ? (
           <div style={errorLineStyle}>{run.error ?? "This run failed."}</div>
-        ) : run?.metrics ? (
+        ) : run && isActiveStatus(run.status) ? (
+          <Loading label={run.status === "queued" ? "Queued — waiting for the engine…" : "Backtest running…"} />
+        ) : m ? (
           <>
             <div style={detailMetricGrid}>
-              <MetricCard label="Total return" value={signedPct(run.metrics.totalReturn)} numericValue={run.metrics.totalReturn} intent="auto" />
-              <MetricCard label="CAGR" value={signedPct(run.metrics.cagr)} numericValue={run.metrics.cagr} intent="auto" />
-              <MetricCard label="Sharpe" value={num(run.metrics.sharpe)} />
-              <MetricCard label="Max drawdown" value={pct(run.metrics.maxDrawdown)} intent="negative" />
-              <MetricCard label="Volatility" value={pct(run.metrics.volatility)} />
+              <MetricCard label="Total return" value={signedPct(m.totalReturn)} numericValue={m.totalReturn ?? undefined} intent="auto" />
+              <MetricCard label="CAGR" value={signedPct(m.cagr)} numericValue={m.cagr ?? undefined} intent="auto" />
+              <MetricCard label="Excess CAGR" value={signedPct(m.excessCagr)} numericValue={m.excessCagr ?? undefined} intent="auto" />
+              <MetricCard label="Sharpe" value={num(m.sharpe)} />
+              <MetricCard label="Max drawdown" value={pct(m.maxDrawdown)} intent="negative" />
+              <MetricCard label="Volatility" value={pct(m.volatility)} />
+              <MetricCard label="Final value" value={money(m.finalValue, true)} />
             </div>
-            {run.equityCurve?.length ? (
+            {equity.length ? (
               <div style={{ marginTop: 16 }}>
-                <PlotlyChart data={buildEquityTraces(run.equityCurve)} height={300} />
+                <PlotlyChart data={buildEquityTraces(equity)} height={300} />
+                <PlotlyChart data={buildDrawdownTrace(equity)} height={180} />
+              </div>
+            ) : null}
+            {run?.holdings?.length ? (
+              <div style={{ marginTop: 16 }}>
+                <HoldingsTable holdings={run.holdings} maxRows={12} />
               </div>
             ) : null}
           </>
         ) : (
-          <div style={emptyLineStyle}>This run is still {run?.status ?? "pending"}.</div>
+          <div style={emptyLineStyle}>This run is {run?.status ?? "pending"} — no metrics to show.</div>
         )}
       </Panel>
     </div>

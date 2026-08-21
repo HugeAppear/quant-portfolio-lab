@@ -1,164 +1,205 @@
 // Shared domain types for the quant-portfolio-lab frontend.
-// These mirror the JSON the backend is expected to return. Adjust field names
-// here if your API uses different ones — the rest of the app keys off this file.
+// These mirror the pydantic models in src/quant_portfolio_lab/api/schemas.py
+// one-to-one (same camelCase field names) — change them together.
 
 // ---------------------------------------------------------------------------
-// Option lists (also drive the run-config form)
+// Option lists (drive the run-config form; must match the Python engine)
 // ---------------------------------------------------------------------------
 
 export const STRATEGIES = [
-  { id: "momentum", label: "Cross-sectional momentum" },
-  { id: "mean_reversion", label: "Short-term mean reversion" },
-  { id: "stat_arb", label: "Statistical arbitrage (pairs)" },
-  { id: "value", label: "Value factor" },
-  { id: "low_vol", label: "Low volatility" },
-  { id: "ml", label: "ML ensemble" },
-  { id: "equal_weight", label: "Equal weight (benchmark)" },
+  { id: "low_pbr", label: "Low PBR (value)" },
+  { id: "low_per", label: "Low PER (value)" },
+  { id: "value_momentum_quality", label: "Value + Momentum + Quality" },
+  { id: "defensive_value", label: "Defensive value (low vol tilt)" },
+  { id: "momentum_lowvol", label: "Momentum + Low volatility" },
 ] as const;
 export type StrategyId = (typeof STRATEGIES)[number]["id"];
 
 export const REBALANCE_FREQUENCIES = [
-  { id: "daily", label: "Daily" },
-  { id: "weekly", label: "Weekly" },
-  { id: "monthly", label: "Monthly" },
-  { id: "quarterly", label: "Quarterly" },
+  { id: "6M", label: "Every 6 months" },
+  { id: "1Y", label: "Yearly" },
 ] as const;
 export type RebalanceFrequency = (typeof REBALANCE_FREQUENCIES)[number]["id"];
 
-export const UNIVERSES = [
-  { id: "sp500", label: "S&P 500" },
-  { id: "nasdaq100", label: "Nasdaq 100" },
-  { id: "russell1000", label: "Russell 1000" },
-  { id: "custom", label: "Custom watchlist" },
+export const WEIGHTINGS = [
+  { id: "equal", label: "Equal weight" },
+  { id: "score", label: "Score weighted" },
+  { id: "inverse_vol", label: "Inverse volatility" },
 ] as const;
-export type UniverseId = (typeof UNIVERSES)[number]["id"];
+export type WeightingId = (typeof WEIGHTINGS)[number]["id"];
+
+export const DATA_MODES = [
+  { id: "auto", label: "Auto (DuckDB → synthetic)" },
+  { id: "synthetic", label: "Synthetic (offline demo)" },
+] as const;
+export type DataMode = (typeof DATA_MODES)[number]["id"];
 
 export function strategyLabel(id: StrategyId): string {
   return STRATEGIES.find((s) => s.id === id)?.label ?? id;
 }
-export function universeLabel(id: UniverseId): string {
-  return UNIVERSES.find((u) => u.id === id)?.label ?? id;
+export function weightingLabel(id: WeightingId): string {
+  return WEIGHTINGS.find((w) => w.id === id)?.label ?? id;
+}
+export function dataModeLabel(mode: string | null | undefined): string {
+  if (mode === "duckdb") return "DuckDB (real data)";
+  if (mode === "synthetic") return "Synthetic data";
+  return mode ?? "—";
 }
 
 // ---------------------------------------------------------------------------
 // Runs
 // ---------------------------------------------------------------------------
 
-export type RunStatus = "queued" | "running" | "completed" | "failed";
+export type RunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+export const ACTIVE_RUN_STATUSES: RunStatus[] = ["queued", "running"];
 
 export interface RunConfig {
   strategy: StrategyId;
-  universe: UniverseId;
-  startDate: string; // ISO yyyy-mm-dd
-  endDate: string; // ISO yyyy-mm-dd
   rebalance: RebalanceFrequency;
-  initialCapital: number;
-  transactionCostBps: number;
+  topN: number;
+  weighting: WeightingId;
+  benchmark: string;             // e.g. "KOSPI"
+  startDate?: string | null;     // ISO yyyy-mm-dd; null = full history
+  endDate?: string | null;
+  initialCapital: number;        // KRW
+  feeBps: number;                // brokerage fee, basis points
+  taxBps: number;                // sell-side transaction tax, basis points
   slippageBps: number;
-  params: Record<string, number | string | boolean>;
+  dataMode: DataMode;
 }
 
 export interface Metrics {
-  totalReturn: number; // fraction, e.g. 1.84 == +184%
-  cagr: number; // fraction
-  volatility: number; // annualized fraction
-  sharpe: number;
-  sortino: number;
-  maxDrawdown: number; // negative fraction, e.g. -0.32
-  calmar: number;
-  winRate: number; // fraction
-  turnover: number; // annualized fraction
+  totalReturn?: number | null;   // fraction, e.g. 0.84 == +84%
+  cagr?: number | null;
+  volatility?: number | null;    // annualized fraction
+  sharpe?: number | null;
+  sortino?: number | null;
+  maxDrawdown?: number | null;   // negative fraction
+  calmar?: number | null;
+  winRate?: number | null;       // fraction of up days
+  turnover?: number | null;      // average per-rebalance turnover
+  finalValue?: number | null;    // KRW
+  benchmarkTotalReturn?: number | null;
+  benchmarkCagr?: number | null;
+  excessCagr?: number | null;
+  benchmarkMaxDrawdown?: number | null;
 }
 
 export interface EquityPoint {
-  date: string; // ISO date
-  equity: number; // portfolio value
-  benchmark?: number; // benchmark value on the same base
-  drawdown?: number; // negative fraction
+  date: string;                  // ISO date
+  equity: number;                // portfolio value (KRW)
+  benchmark?: number | null;     // benchmark rebased to the same start capital
+  drawdown?: number | null;      // negative fraction
 }
 
 export interface Holding {
   ticker: string;
-  name?: string;
-  sector?: string;
-  weight: number; // fraction of portfolio
-  shares?: number;
-  value?: number;
+  name?: string | null;
+  sector?: string | null;        // market segment (KOSPI / KOSDAQ)
+  weight: number;
+  shares?: number | null;
+  value?: number | null;         // KRW
 }
 
 export interface AllocationPoint {
-  date: string; // ISO date
+  date: string;
   weights: Record<string, number>; // ticker -> weight fraction
 }
 
 export interface RunSummary {
   id: string;
-  createdAt: string; // ISO timestamp
+  createdAt: string;             // ISO timestamp
   status: RunStatus;
   strategy: StrategyId;
-  universe: UniverseId;
-  metrics?: Partial<Metrics>; // light metrics for the list view
+  rebalance: RebalanceFrequency;
+  topN: number;
+  weighting: WeightingId;
+  dataModeUsed?: string | null;  // "duckdb" | "synthetic"
+  metrics?: Metrics | null;
 }
 
 export interface Run extends RunSummary {
   config: RunConfig;
-  metrics?: Metrics;
-  equityCurve?: EquityPoint[];
-  holdings?: Holding[];
-  allocation?: AllocationPoint[];
-  error?: string;
+  equityCurve?: EquityPoint[] | null;
+  holdings?: Holding[] | null;
+  allocation?: AllocationPoint[] | null;
+  error?: string | null;
 }
 
 export interface DashboardData {
-  asOf: string; // ISO timestamp
+  asOf: string;
   runCount: number;
-  latestRun?: Run;
+  latestRun?: Run | null;
 }
 
 // ---------------------------------------------------------------------------
-// Research shortlist (scripts/recommend.py)
+// Research shortlist (recommendation module)
 // ---------------------------------------------------------------------------
 
 export interface FactorSignal {
-  name: string; // e.g. "momentum", "value", "quality"
-  value: number; // normalized score, typically a z-score in roughly [-3, 3]
+  name: string;                  // "value" | "momentum" | "low vol" | "quality"
+  value: number;                 // percentile score in [0, 1]
 }
 
 export interface ShortlistItem {
   rank: number;
   ticker: string;
   name: string;
-  sector?: string;
-  score: number; // composite score
+  sector?: string | null;
+  score?: number | null;
+  targetWeight?: number | null;
+  price?: number | null;
+  per?: number | null;
+  pbr?: number | null;
   signals: FactorSignal[];
-  rationale?: string;
 }
 
 export interface Shortlist {
-  generatedAt: string; // ISO timestamp
-  asOf: string; // data as-of date
-  universe: UniverseId;
+  generatedAt: string;
+  asOf: string;
+  strategy: StrategyId;
+  weighting: WeightingId;
+  dataModeUsed: string;
   items: ShortlistItem[];
 }
 
 // ---------------------------------------------------------------------------
-// Data health
+// Data health / data jobs
 // ---------------------------------------------------------------------------
 
 export type HealthStatus = "ok" | "warning" | "error";
 
 export interface DataHealthCheck {
-  source: string; // e.g. "prices: equities"
+  source: string;
   status: HealthStatus;
-  lastUpdated?: string; // ISO date
-  rows?: number;
-  symbols?: number;
-  missingSessions?: number;
-  staleDays?: number;
-  message?: string;
+  lastUpdated?: string | null;
+  rows?: number | null;
+  symbols?: number | null;
+  staleDays?: number | null;
+  message?: string | null;
 }
 
 export interface DataHealth {
-  checkedAt: string; // ISO timestamp
+  checkedAt: string;
+  dbPath: string;
   checks: DataHealthCheck[];
+}
+
+export interface DataLoadRequest {
+  kind: "prices" | "fundamentals" | "all";
+  start: string;
+  end?: string | null;
+  universeSize: number;
+  synthetic: boolean;
+}
+
+export interface DataJob {
+  id: string;
+  kind: string;
+  status: "queued" | "running" | "completed" | "failed";
+  createdAt: string;
+  finishedAt?: string | null;
+  logTail: string[];
+  error?: string | null;
 }

@@ -61,14 +61,14 @@ export function num(v: number | null | undefined, digits = 2): string {
   return isNum(v) ? v.toFixed(digits) : "—";
 }
 
-const moneyFmt = new Intl.NumberFormat("en-US", {
+const moneyFmt = new Intl.NumberFormat("ko-KR", {
   style: "currency",
-  currency: "USD",
+  currency: "KRW",
   maximumFractionDigits: 0,
 });
-const moneyCompactFmt = new Intl.NumberFormat("en-US", {
+const moneyCompactFmt = new Intl.NumberFormat("ko-KR", {
   style: "currency",
-  currency: "USD",
+  currency: "KRW",
   notation: "compact",
   maximumFractionDigits: 1,
 });
